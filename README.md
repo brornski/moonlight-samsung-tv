@@ -35,14 +35,21 @@ This can then be used to package the app for samsung accordingly (see the docker
      docker run -it --rm ghcr.io/oneliberty/moonlight-tizen-nacl:samsung_nacl
      ```
 3. **Install the Application**:
-   - Connect and install via Smart Development Bridge:
+   - Connect to the TV via Smart Development Bridge, replacing `YOUR_TV_IP` with your TV's IP:
      ```
      sdb connect YOUR_TV_IP
      sdb devices
-     tizen install -n MoonlightNaCl.wgt -t YOUR_DEVICE_ID
-     exit
      ```
-   - Replace `YOUR_TV_IP` and `YOUR_DEVICE_ID` with your TV's IP and Device ID respectively.
+   - Install the app:
+     ```
+     tizen install -n MoonlightNaCl.wgt
+     ```
+     If you have multiple TVs connected, specify which TV to install by using this command instead:
+     ```
+     tizen install -n MoonlightNaCl.wgt -t YOUR_DEVICE_ID
+     ```
+     where `YOUR_DEVICE_ID` is the last column shown in `sdb devices`, something like `UE65NU7400`.
+   - `exit`
 
 4. **(Optional) Disable Developer Mode**:
    - Revisit the `Apps` panel to turn off Developer mode and restart the TV.
