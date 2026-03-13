@@ -35,6 +35,7 @@ The stock Moonlight NaCl app - sideloaded via tizen studio - has no way to exit 
 - **Bitrate and refresh rate** can be changed freely in the overlay.
 - If you find yourself on a black screen, **wait 15 seconds** and the app will auto-close.
 - This app requires [Sunshine](https://github.com/LizardByte/Sunshine) running on your host PC.
+- It's easiest to connect your PC to your TV via HDMI and use the remote's **Source** button to switch back and forth. This makes the install process much smoother.
 
 ## Install Guide
 
