@@ -770,6 +770,7 @@ function playGameMode() {
   fullscreenNaclModule();
   $('#loadingSpinner').css('display', 'inline-block');
   Navigation.stop();
+  startStreamTimeout();
 }
 
 // Maximize the size of the nacl module by scaling and resizing appropriately
@@ -1095,6 +1096,9 @@ function initSamsungKeys() {
       'ChannelList',   // F7
       'ChannelDown',   // F11
       'ChannelUp',     // F12
+      'MediaPlayPause', // Play/Pause button
+      'MediaPlay',
+      'MediaPause',
     ],
     onKeydownListener: remoteControllerHandler
   };
@@ -1158,6 +1162,97 @@ function onWindowLoad() {
   });
 
   initSamsungKeys();
+}
+
+// Stream overlay settings data
+var overlayResolutions = ['858:480', '1280:720', '1920:1080', '2560:1440', '3840:2160'];
+var overlayResLabels = ['480p', '720p', '1080p', '1440p', '4K'];
+var overlayFramerates = ['30', '60'];
+var overlayFpsLabels = ['30 FPS', '60 FPS'];
+var overlayBitrateMin = 1;
+var overlayBitrateMax = 50;
+var overlayBitrateStep = 1;
+
+var overlayState = {
+    resIndex: 1,    // default 720p
+    fpsIndex: 1,    // default 60
+    bitrate: 10     // default 10 Mbps
+};
+
+function syncOverlayFromSettings() {
+    var currentRes = $('#selectResolution').data('value');
+    var currentFps = $('#selectFramerate').data('value').toString();
+    var currentBitrate = parseInt($('#bitrateSlider').val());
+
+    var ri = overlayResolutions.indexOf(currentRes);
+    if (ri >= 0) overlayState.resIndex = ri;
+    var fi = overlayFramerates.indexOf(currentFps);
+    if (fi >= 0) overlayState.fpsIndex = fi;
+    overlayState.bitrate = currentBitrate || 10;
+
+    updateOverlayDisplay();
+}
+
+function updateOverlayDisplay() {
+    $('#overlay-res-value').text(overlayResLabels[overlayState.resIndex]);
+    $('#overlay-fps-value').text(overlayFpsLabels[overlayState.fpsIndex]);
+    $('#overlay-bitrate-value').text(overlayState.bitrate + ' Mbps');
+}
+
+function applyOverlaySettings() {
+    var res = overlayResolutions[overlayState.resIndex];
+    var resLabel = overlayResLabels[overlayState.resIndex];
+    var fps = overlayFramerates[overlayState.fpsIndex];
+    var fpsLabel = overlayFpsLabels[overlayState.fpsIndex];
+
+    $('#selectResolution').text(resLabel).data('value', res);
+    storeData('resolution', res, null);
+    $('#selectFramerate').text(fpsLabel).data('value', fps);
+    storeData('frameRate', fps, null);
+    $('#bitrateSlider')[0].MaterialSlider.change(overlayState.bitrate.toString());
+    updateBitrateField();
+}
+
+function toggleStreamOverlay() {
+    var overlay = document.getElementById('streamOverlay');
+    if (overlay.style.display === 'none' || overlay.style.display === '') {
+        showStreamOverlay();
+    } else {
+        hideStreamOverlay();
+    }
+}
+
+function showStreamOverlay() {
+    syncOverlayFromSettings();
+    document.getElementById('streamOverlay').style.display = 'flex';
+    Navigation.start();
+    Navigation.push(Views.StreamOverlay);
+}
+
+function hideStreamOverlay() {
+    document.getElementById('streamOverlay').style.display = 'none';
+    Navigation.pop();
+    Navigation.stop();
+}
+
+// Stream timeout: auto-exit if no video after 15 seconds
+var streamTimeoutId = null;
+
+function startStreamTimeout() {
+    clearStreamTimeout();
+    streamTimeoutId = setTimeout(function() {
+        if (isInGame) {
+            snackbarLogLong('No video received. Auto-exiting stream. Try lowering your settings.');
+            sendMessage('stopRequest');
+        }
+    }, 15000);
+}
+
+function clearStreamTimeout() {
+    if (streamTimeoutId) {
+        clearTimeout(streamTimeoutId);
+        streamTimeoutId = null;
+    }
 }
 
 window.onload = onWindowLoad;

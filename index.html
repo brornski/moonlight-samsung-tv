@@ -186,6 +186,34 @@
       <button type="button" class="mdl-button mdl-js-button mdl-button--raised mdl-button--colored mdl-js-ripple-effect" id="continueAddHost">Continue</button>
     </div>
   </dialog>
+  <!-- Stream Settings Overlay -->
+  <div id="streamOverlay" class="stream-overlay" style="display:none;">
+    <div class="stream-overlay-content">
+      <h3 class="stream-overlay-title">Stream Settings</h3>
+      <div class="stream-overlay-settings">
+        <div class="overlay-setting" id="overlay-resolution" tabindex="0">
+          <span class="overlay-setting-label">Resolution</span>
+          <span class="overlay-setting-value" id="overlay-res-value">720p</span>
+        </div>
+        <div class="overlay-setting" id="overlay-framerate" tabindex="0">
+          <span class="overlay-setting-label">Framerate</span>
+          <span class="overlay-setting-value" id="overlay-fps-value">60 FPS</span>
+        </div>
+        <div class="overlay-setting" id="overlay-bitrate" tabindex="0">
+          <span class="overlay-setting-label">Bitrate</span>
+          <span class="overlay-setting-value" id="overlay-bitrate-value">10 Mbps</span>
+        </div>
+        <div class="overlay-setting overlay-setting-action" id="overlay-apply" tabindex="0">
+          <span class="overlay-setting-label">Apply &amp; Restart Stream</span>
+        </div>
+        <div class="overlay-setting overlay-setting-action" id="overlay-close" tabindex="0">
+          <span class="overlay-setting-label">Resume Stream</span>
+        </div>
+      </div>
+      <p class="overlay-hint">Back = Resume &bull; Select = Change &bull; Apply restarts stream with new settings</p>
+    </div>
+  </div>
+
   <div id="snackbar" class="mdl-snackbar mdl-js-snackbar">
     <div class="mdl-snackbar__text"></div>
     <button id="snackButton" class="mdl-snackbar__action" type="button"></button>

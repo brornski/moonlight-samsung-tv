@@ -129,7 +129,16 @@ function remoteControllerHandler(e) {
           Navigation.accept();
           break;
       case tvKey.KEY_RETURN:
-          Navigation.back();
+          if (isInGame && document.getElementById('streamOverlay').style.display !== 'none'
+              && document.getElementById('streamOverlay').style.display !== '') {
+              // Overlay is open — close it, don't exit stream
+              Navigation.back();
+          } else if (isInGame) {
+              // In stream, no overlay — exit the stream
+              sendMessage('stopRequest');
+          } else {
+              Navigation.back();
+          }
           break;
       case tvKey.KEY_VOLUME_UP:
           tizen.tvaudiocontrol.setVolumeUp();
@@ -145,6 +154,11 @@ function remoteControllerHandler(e) {
           break;
       case tvKey.KEY_GREEN:
           Navigation.startBtn();
+          break;
+      case tvKey.KEY_PLAYPAUSE:
+          if (isInGame) {
+              toggleStreamOverlay();
+          }
           break;
   }
 }

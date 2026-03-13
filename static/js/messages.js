@@ -69,6 +69,7 @@ function handleMessage(msg) {
         showApps(api);
       });
     } else if (msg.data === 'Connection Established') {
+      clearStreamTimeout();
       $('#loadingSpinner').css('display', 'none');
       $('body').css('backgroundColor', 'black');
 
@@ -84,6 +85,7 @@ function handleMessage(msg) {
       // FIXME: Really use a dialog
       snackbarLogLong(msg.data.replace('DialogMsg: ', ''));
     } else if (msg.data === 'displayVideo') {
+      clearStreamTimeout();
       // Show the video stream now
       $("#nacl_module")[0].style.opacity = 1.0;
     } else if (msg.data.indexOf('controllerRumble: ' ) === 0) {

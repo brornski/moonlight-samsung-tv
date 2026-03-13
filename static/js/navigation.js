@@ -251,6 +251,85 @@ var Views = {
   },
 };
 
+Views.StreamOverlay = {
+    items: ['overlay-resolution', 'overlay-framerate', 'overlay-bitrate', 'overlay-apply', 'overlay-close'],
+    index: 0,
+    up: function () {
+        var el = document.getElementById(this.items[this.index]);
+        el.classList.remove('hovered');
+        el.blur();
+        this.index = (this.index - 1 + this.items.length) % this.items.length;
+        el = document.getElementById(this.items[this.index]);
+        el.classList.add('hovered');
+        el.focus();
+    },
+    down: function () {
+        var el = document.getElementById(this.items[this.index]);
+        el.classList.remove('hovered');
+        el.blur();
+        this.index = (this.index + 1) % this.items.length;
+        el = document.getElementById(this.items[this.index]);
+        el.classList.add('hovered');
+        el.focus();
+    },
+    left: function () {
+        var current = this.items[this.index];
+        if (current === 'overlay-resolution') {
+            overlayState.resIndex = (overlayState.resIndex - 1 + overlayResolutions.length) % overlayResolutions.length;
+            updateOverlayDisplay();
+        } else if (current === 'overlay-framerate') {
+            overlayState.fpsIndex = (overlayState.fpsIndex - 1 + overlayFramerates.length) % overlayFramerates.length;
+            updateOverlayDisplay();
+        } else if (current === 'overlay-bitrate') {
+            overlayState.bitrate = Math.max(overlayBitrateMin, overlayState.bitrate - overlayBitrateStep);
+            updateOverlayDisplay();
+        }
+    },
+    right: function () {
+        var current = this.items[this.index];
+        if (current === 'overlay-resolution') {
+            overlayState.resIndex = (overlayState.resIndex + 1) % overlayResolutions.length;
+            updateOverlayDisplay();
+        } else if (current === 'overlay-framerate') {
+            overlayState.fpsIndex = (overlayState.fpsIndex + 1) % overlayFramerates.length;
+            updateOverlayDisplay();
+        } else if (current === 'overlay-bitrate') {
+            overlayState.bitrate = Math.min(overlayBitrateMax, overlayState.bitrate + overlayBitrateStep);
+            updateOverlayDisplay();
+        }
+    },
+    accept: function () {
+        var current = this.items[this.index];
+        if (current === 'overlay-apply') {
+            applyOverlaySettings();
+            hideStreamOverlay();
+            sendMessage('stopRequest');
+            snackbarLog('Settings saved. Restart the stream to apply.');
+        } else if (current === 'overlay-close') {
+            hideStreamOverlay();
+        } else {
+            // For resolution/framerate, cycle forward on select press
+            this.right();
+        }
+    },
+    back: function () {
+        hideStreamOverlay();
+    },
+    enter: function () {
+        this.index = 0;
+        var el = document.getElementById(this.items[0]);
+        el.classList.add('hovered');
+        el.focus();
+    },
+    leave: function () {
+        var el = document.getElementById(this.items[this.index]);
+        if (el) {
+            el.classList.remove('hovered');
+            el.blur();
+        }
+    },
+};
+
 var Navigation = (function () {
   var hasFocus = false;
 

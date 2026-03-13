@@ -330,3 +330,79 @@ main {
 #nacl_module {
     cursor: none;
 }
+
+/* Stream Settings Overlay */
+.stream-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.85);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.stream-overlay-content {
+    background-color: #1a1d25;
+    border: 2px solid #00A3C6;
+    border-radius: 12px;
+    padding: 30px 40px;
+    min-width: 400px;
+    max-width: 500px;
+}
+.stream-overlay-title {
+    color: #00A3C6;
+    font-weight: 300;
+    font-size: 24px;
+    margin: 0 0 20px 0;
+    text-align: center;
+}
+.stream-overlay-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.overlay-setting {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-radius: 6px;
+    background-color: #282C38;
+    transition: all 0.15s ease;
+}
+.overlay-setting:focus,
+.overlay-setting.hovered {
+    background-color: #00A3C6;
+    outline: none;
+    transform: scale(1.02);
+}
+.overlay-setting-label {
+    font-size: 16px;
+    font-weight: 400;
+    color: #fff;
+}
+.overlay-setting-value {
+    font-size: 16px;
+    font-weight: 500;
+    color: #fff;
+    min-width: 80px;
+    text-align: right;
+}
+.overlay-setting-action {
+    margin-top: 8px;
+    justify-content: center;
+    background-color: #333846;
+}
+.overlay-setting-action .overlay-setting-label {
+    text-align: center;
+    font-weight: 500;
+}
+.overlay-hint {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 12px;
+    text-align: center;
+    margin: 16px 0 0 0;
+}
