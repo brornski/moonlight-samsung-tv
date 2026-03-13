@@ -1,70 +1,69 @@
-<p align=left>
-	<a href="https://discord.gg/zHafSd3bTw">
-		<img src="https://discordapp.com/api/guilds/1196915612522393651/widget.png?style=banner2" alt="Discord Banner 2"/> 
-	</a>
-</p>
+# Moonlight Samsung TV (NaCl)
 
-## Moonlight-Tizen-NaCl
-GameStream client for Samsung Smart TV's running Tizen OS (3.0 to 6.0) 
+Modified [Moonlight](https://github.com/moonlight-stream) game streaming client for Samsung Smart TVs running Tizen OS 3.0-6.0. Forked from [OneLiberty/moonlight-tizen-nacl](https://github.com/OneLiberty/moonlight-tizen-nacl).
 
-### Note
-As a non-developer with limited coding knowledge, I do my best to maintain the repository and address issues. If you encounter problems, please report them in the issue section. While I can't guarantee a solution, I will certainly investigate.
-This project is delivered as a POC, don't expect good performances and a fully working environement. 
+Built and tested on the **Samsung UN75RU9000FXZA** (2019, Tizen 5.0) with the **Samsung OneRemote (TM1950A)**.
 
-I've spent a lot of time trying to make this work for older TVs, hopefully someone that is much more talented than me can improve the app ! 
+## What's Changed
 
-### Build from source 
-- Install pepper SDK 
-- Clone the repo and `make` inside the folder. 
+The stock Moonlight NaCl app has no way to exit a stream or change settings using the Samsung OneRemote (which has no physical color buttons). This fork fixes that:
 
-I couldn't get the pepper SDK to generate a correct file for NaCl especially the .nmf so i provide a modified .nmf to use for samsung port.
+- **Back button exits the stream** - Press Return/Back on your remote to leave a stream and return to the app list. The original app had no way to do this on the OneRemote.
+- **In-stream settings overlay** - Press Play/Pause during a stream to open a settings panel. Change resolution, framerate, and bitrate without reinstalling the app.
+- **15-second auto-exit** - If no video is received within 15 seconds (black screen), the app automatically exits the stream so you never get stuck.
 
-The build process generate a pnacl (.pexe) file which we need to translate to nacl (.nexe) and to arm
+## Remote Button Map
 
-- `pnacl-translate -arch arm moonlight-chrome.pexe -o moonlight-chrome-arm.nexe `
+### During a stream
+| Button | Action |
+|--------|--------|
+| **Back (Return)** | Exit stream, return to app list |
+| **Play/Pause** | Open settings overlay |
 
-This can then be used to package the app for samsung accordingly (see the docker file)
+### Inside the settings overlay
+| Button | Action |
+|--------|--------|
+| **D-pad Up/Down** | Move between settings |
+| **D-pad Left/Right** | Change value |
+| **Select** | Confirm / cycle value |
+| **Back** | Close overlay, resume stream |
+| **Apply & Restart Stream** | Save settings and exit (relaunch to apply) |
 
-### Install the app
-1. **Enable Developer Mode on Samsung Smart TV**:
-   - Navigate to `Apps` panel, enter `12345` on the remote, turn on `Developer mode`, input your PC's IP, and restart the TV.
-2. **Install and Launch Docker Image**:
-   - Install Docker Desktop — [Installation Guide](https://docs.docker.com/desktop/)
-   - Run in Windows PowerShell:
-     ```
-     docker run -it --rm ghcr.io/oneliberty/moonlight-tizen-nacl:samsung_nacl
-     ```
-3. **Install the Application**:
-   - Connect to the TV via Smart Development Bridge, replacing `YOUR_TV_IP` with your TV's IP:
-     ```
-     sdb connect YOUR_TV_IP
-     sdb devices
-     ```
-   - Install the app:
-     ```
-     tizen install -n MoonlightNaCl.wgt
-     ```
-     If you have multiple TVs connected, specify which TV to install by using this command instead:
-     ```
-     tizen install -n MoonlightNaCl.wgt -t YOUR_DEVICE_ID
-     ```
-     where `YOUR_DEVICE_ID` is the last column shown in `sdb devices`, something like `UE65NU7400`.
-   - `exit`
+## Important Notes
 
-4. **(Optional) Disable Developer Mode**:
-   - Revisit the `Apps` panel to turn off Developer mode and restart the TV.
+- After testing, anything above **1080p** in Moonlight's settings will result in a black screen on this Samsung model. You are better off changing the resolution in your **PC's display settings** rather than in Moonlight.
+- **Bitrate and refresh rate** can be changed freely in the overlay.
+- If you find yourself on a black screen, **wait 15 seconds** and the app will auto-close.
+- This app requires [Sunshine](https://github.com/LizardByte/Sunshine) running on your host PC.
 
-Moonlight should now be available under `Recent Apps` on your Samsung Smart TV.
+## Install
 
->[!NOTE]
-> `sdb` comes with tizen studio, so alternatively you can install tizen studio and use `sdb` to install it. 
+### Prerequisites
+- Samsung TV in Developer Mode
+- [Tizen Studio](https://developer.tizen.org/development/tizen-studio/download/) installed on your PC
+- Sunshine running on your host PC
 
-## Contributing
-- Contributions are welcome! Fork the repo, create pull requests, or open issues. If you find the project useful, consider giving it a star!
-- Issues are welcomed, i wasn't able to test the app myself and i know there still are a lot of bugs, don't hesitate to report them. 
+### Steps
+1. **Enable Developer Mode on your TV**: Go to Apps, enter `12345`, toggle Developer Mode on, enter your PC's IP, restart the TV.
+2. **Connect via sdb**:
+   ```
+   sdb connect YOUR_TV_IP
+   sdb devices
+   ```
+3. **Download the .wgt** from [Releases](https://github.com/brornski/moonlight-samsung-tv/releases) or build from source.
+4. **Install**:
+   ```
+   tizen install -n MoonlightNaCl.wgt -s YOUR_TV_IP:26101
+   ```
+5. Open Moonlight from your TV's app list and pair with your Sunshine host.
+
+## Build from Source
+- Install the Pepper SDK
+- Clone the repo and run `make`
+- Translate PNaCl to NaCl ARM: `pnacl-translate -arch arm moonlight-chrome.pexe -o moonlight-chrome-arm.nexe`
+- Package with Tizen Studio: `tizen package -t wgt -s YOUR_PROFILE -- .`
 
 ## Credits
-- Moonlight for Chrome OS is developed and maintained by [Moonlight Developers](https://github.com/moonlight-stream/moonlight-chrome)
-- Dockerfile have been readapted by [pablojrl123](https://github.com/pablojrl123/moonlight-tizen-docker)
-- Huge thanks to [Phazeee](https://github.com/MrPhaze62) for doing all the testing for this version. 
-- Thanks to [henry2fa](https://github.com/henryfa2) for the discord and more. 
+- [Moonlight for Chrome OS](https://github.com/moonlight-stream/moonlight-chrome) by Moonlight Developers
+- [OneLiberty/moonlight-tizen-nacl](https://github.com/OneLiberty/moonlight-tizen-nacl) - original NaCl port for Samsung TVs
+- [LizardByte/Sunshine](https://github.com/LizardByte/Sunshine) - open source game streaming host

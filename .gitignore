@@ -1,0 +1,7 @@
+build/
+release-download/
+release-extracted/
+*.wgt
+author-signature.xml
+signature1.xml
+.manifest.tmp
