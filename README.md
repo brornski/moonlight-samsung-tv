@@ -6,7 +6,7 @@ Built and tested on the **Samsung UN75RU9000FXZA** (2019, Tizen 5.0) with the **
 
 ## What's Changed
 
-The stock Moonlight NaCl app - sideloaded via tizen studio - has no way to exit a stream or change settings using the Samsung OneRemote. Created due to multiple blackscreens changing resolution, and the inability to return to the landing screen of moonlight. This fork fixes that:
+The stock Moonlight NaCl app - sideloaded via Tizen Studio - has no way to exit a stream or change settings using the Samsung OneRemote. Created due to multiple blackscreens changing resolution, and the inability to return to the landing screen of Moonlight. This fork fixes that:
 
 - **Back button exits the stream** - Press Return/Back on your remote to stop streaming and return to Moonlight's home screen. The original app had no way to do this on the OneRemote.
 - **In-stream settings overlay** - Press Play/Pause during a stream to open a settings panel. Change resolution, framerate, and bitrate without reinstalling the app.
@@ -35,7 +35,6 @@ The stock Moonlight NaCl app - sideloaded via tizen studio - has no way to exit 
 - **Bitrate and refresh rate** can be changed freely in the overlay.
 - If you find yourself on a black screen, **wait 15 seconds** and the app will auto-close.
 - This app requires [Sunshine](https://github.com/LizardByte/Sunshine) running on your host PC.
-- It's easiest to connect your PC to your TV via HDMI and use the remote's **Source** button to switch back and forth. This makes the install process much smoother.
 
 ## Install Guide
 
@@ -109,7 +108,7 @@ If you have [Claude Code](https://docs.anthropic.com/en/docs/claude-code) instal
    If anything fails (certificate errors, connection issues), troubleshoot it.
    ```
 
-3. Claude will handle the rest — downloading tools, connecting to your TV, and installing the app. It will ask you for input if it hits anything that needs your attention (like creating a certificate or if the TV already has a different version installed).
+3. Claude will handle the rest — downloading tools, connecting to your TV, and installing the app. It will ask you for input if it hits anything that needs your attention (like if the TV already has a different version installed).
 
 4. Once installed, open Moonlight on your TV and follow Claude's instructions to pair with Sunshine.
 
@@ -166,7 +165,9 @@ You should see your TV listed as a connected device. If it says `offline`, try r
 
 1. Download the latest **`MoonlightNaCl.wgt`** from the [Releases](https://github.com/brornski/moonlight-samsung-tv/releases) page.
 
-2. Install it to your TV:
+2. Open a terminal and navigate to the folder where you downloaded the `.wgt` file (usually your Downloads folder).
+
+3. Install it to your TV:
 
    **Windows:**
    ```
@@ -180,7 +181,7 @@ You should see your TV listed as a connected device. If it says `offline`, try r
 
    You should see output ending in `Installed the package successfully`.
 
-3. On your TV, open the **Apps** panel. Moonlight should appear in your app list.
+4. On your TV, open the **Apps** panel. Moonlight should appear in your app list.
 
 #### Step 4: Pair with Sunshine
 
