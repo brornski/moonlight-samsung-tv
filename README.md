@@ -17,7 +17,7 @@ The stock Moonlight NaCl app - sideloaded via tizen studio - has no way to exit 
 ### During a stream
 | Button | Action |
 |--------|--------|
-| **Back (Return)** | Exit stream, return to app list |
+| **Back (Return)** | Exit stream, return to Moonlight home screen |
 | **Play/Pause** | Open settings overlay |
 
 ### Inside the settings overlay
@@ -38,14 +38,38 @@ The stock Moonlight NaCl app - sideloaded via tizen studio - has no way to exit 
 
 ## Install Guide
 
-There are **two ways** to install this app on your Samsung TV. Pick whichever works best for you:
+### Before You Start
+
+Both install methods below require these steps first. Do these on your TV before anything else.
+
+> **Tip:** We recommend hooking your PC up to your TV via HDMI so you can easily switch between Sunshine and Moonlight instead of running through your house for the pairing code or any changes.
+
+#### 1. Enable Developer Mode on Your TV
+
+1. Turn on your Samsung TV.
+2. Open the **Apps** panel (press the Smart Hub / Home button, navigate to Apps).
+3. Using your remote, enter **`12345`** on the on-screen number pad (or via the remote's 123 button). A dialog should pop up.
+4. Toggle **Developer Mode** to **ON**.
+5. Enter your **PC's local IP address** (the computer you're installing from). To find it:
+   - **Windows:** Open Command Prompt and type `ipconfig`. Look for your IPv4 address (e.g., `10.0.0.188` or `192.168.1.100`).
+   - **Mac:** Open Terminal and type `ifconfig | grep inet`. Look for your local IP.
+6. **Restart your TV** (power off and back on). You should see "DEVELOP MODE" at the top of the Apps panel.
+
+> **Tip:** If the `12345` dialog doesn't appear, make sure you're in the **Apps** section (not the home screen) and try typing the code slowly.
+
+#### 2. Find Your TV's IP Address
+
+1. On your TV, go to **Settings > General > Network > Network Status > IP Settings**.
+2. Note the IP address (e.g., `10.0.0.222` or `192.168.1.50`).
+
+---
+
+Now pick your install method:
 
 | Method | Time | Difficulty | What You Do |
 |--------|------|------------|-------------|
 | **[Option A: Claude Code (Automated)](#option-a-claude-code-automated)** | ~5 min | Easy | Give Claude your TV's IP and it handles the rest |
 | **[Option B: Manual Install](#option-b-manual-install)** | ~20 min | Moderate | Follow step-by-step terminal commands yourself |
-
-Both methods require **[Sunshine](https://github.com/LizardByte/Sunshine)** running on your host PC and your Samsung TV in **Developer Mode**.
 
 ---
 
@@ -56,9 +80,8 @@ If you have [Claude Code](https://docs.anthropic.com/en/docs/claude-code) instal
 #### Prerequisites
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed on your PC
-- Your Samsung TV in Developer Mode (see [How to Enable Developer Mode](#how-to-enable-developer-mode) below)
-- Your TV's IP address (see [How to Find Your TV's IP](#how-to-find-your-tvs-ip-address) below)
 - [Sunshine](https://github.com/LizardByte/Sunshine) installed on your host PC
+- Developer Mode enabled and TV IP address noted (see [Before You Start](#before-you-start) above)
 
 #### Steps
 
@@ -111,17 +134,8 @@ Tizen Studio is Samsung's development toolkit. You only need it to push the app 
 1. Download **[Tizen Studio](https://developer.tizen.org/development/tizen-studio/download/)** and run the installer.
 2. During installation, you only need the **Tizen SDK tools** — you can skip optional packages to save space.
 3. After installation, note where it was installed (default: `C:\tizen-studio` on Windows, `~/tizen-studio` on Mac/Linux).
-4. I recommend doing this with your PC hooked up via HDMI to your TV so you can easily switch back and forth from Sunshine to Moonlight instead of running through your house for the code or any changes.
 
-#### Step 2: Enable Developer Mode on Your TV
-
-See [How to Enable Developer Mode](#how-to-enable-developer-mode) below.
-
-#### Step 3: Find Your TV's IP Address
-
-See [How to Find Your TV's IP Address](#how-to-find-your-tvs-ip-address) below.
-
-#### Step 4: Connect to Your TV
+#### Step 2: Connect to Your TV
 
 Open a terminal/command prompt on your PC and navigate to the Tizen Studio tools directory:
 
@@ -147,7 +161,7 @@ sdb devices
 
 You should see your TV listed as a connected device. If it says `offline`, try restarting your TV and reconnecting.
 
-#### Step 5: Download and Install the App
+#### Step 3: Download and Install the App
 
 1. Download the latest **`MoonlightNaCl.wgt`** from the [Releases](https://github.com/brornski/moonlight-samsung-tv/releases) page.
 
@@ -167,7 +181,7 @@ You should see your TV listed as a connected device. If it says `offline`, try r
 
 3. On your TV, open the **Apps** panel. Moonlight should appear in your app list.
 
-#### Step 6: Pair with Sunshine
+#### Step 4: Pair with Sunshine
 
 1. Make sure **[Sunshine](https://github.com/LizardByte/Sunshine)** is running on your host PC. You can access its web UI at `https://localhost:47990`.
 2. Open **Moonlight** on your TV.
@@ -178,31 +192,12 @@ You should see your TV listed as a connected device. If it says `offline`, try r
 
 ---
 
-### How to Enable Developer Mode
-
-Both install methods require Developer Mode on your TV.
-
-1. Turn on your Samsung TV.
-2. Open the **Apps** panel (press the Smart Hub / Home button, navigate to Apps).
-3. Using your remote, enter **`12345`** on the on-screen number pad (or via the remote's 123 button). A dialog should pop up.
-4. Toggle **Developer Mode** to **ON**.
-5. Enter your **PC's local IP address** (the computer you're installing from). To find it:
-   - **Windows:** Open Command Prompt and type `ipconfig`. Look for your IPv4 address (e.g., `10.0.0.188` or `192.168.1.100`).
-   - **Mac:** Open Terminal and type `ifconfig | grep inet`. Look for your local IP.
-6. **Restart your TV** (power off and back on). You should see "DEVELOP MODE" at the top of the Apps panel.
-
-> **Tip:** If the `12345` dialog doesn't appear, make sure you're in the **Apps** section (not the home screen) and try typing the code slowly.
-
-### How to Find Your TV's IP Address
-
-Both install methods require your TV's local IP address.
-
-1. On your TV, go to **Settings > General > Network > Network Status > IP Settings**.
-2. Note the IP address (e.g., `10.0.0.222` or `192.168.1.50`).
-
----
-
 ### Troubleshooting
+
+#### Black screen when streaming
+- Anything above **1080p** in Moonlight's settings will cause a black screen on many Samsung models.
+- Wait **15 seconds** and the app will auto-exit.
+- Change your **PC's display resolution** instead of changing Moonlight's resolution setting.
 
 #### "Certificate error" or "Author certificate not match" on install
 Your TV already has a version of Moonlight signed with a different certificate (e.g., from a different PC). You need to uninstall the old version first:
@@ -216,11 +211,6 @@ Your TV already has a version of Moonlight signed with a different certificate (
 
 #### "Loading Moonlight plugin..." hangs forever
 This usually means the NaCl binary is missing or corrupted. Make sure you downloaded the `.wgt` from the Releases page and not just the source code.
-
-#### Black screen when streaming
-- Anything above **1080p** in Moonlight's settings will cause a black screen on many Samsung models.
-- Wait **15 seconds** and the app will auto-exit.
-- Change your **PC's display resolution** instead of changing Moonlight's resolution setting.
 
 #### App doesn't appear after install
 - Make sure the install command showed `Installed the package successfully`.
