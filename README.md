@@ -100,12 +100,11 @@ If you have [Claude Code](https://docs.anthropic.com/en/docs/claude-code) instal
    My TV's IP address is: YOUR_TV_IP
 
    Here's what to do:
-   1. Clone https://github.com/brornski/moonlight-samsung-tv
-   2. Download Tizen Studio if I don't have it installed
-   3. Download the latest MoonlightNaCl.wgt from the repo's Releases page
-   4. Connect to my TV via sdb
-   5. Install the .wgt to my TV
-   6. Walk me through pairing with Sunshine when it's done
+   1. Download Tizen Studio if I don't have it installed
+   2. Download the latest MoonlightNaCl.wgt from https://github.com/brornski/moonlight-samsung-tv/releases
+   3. Connect to my TV via sdb
+   4. Install the .wgt to my TV
+   5. Walk me through pairing with Sunshine when it's done
 
    If anything fails (certificate errors, connection issues), troubleshoot it.
    ```
