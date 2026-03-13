@@ -53,7 +53,8 @@ Both install methods below require these steps first. Do these on your TV before
 5. Enter your **PC's local IP address** (the computer you're installing from). To find it:
    - **Windows:** Open Command Prompt and type `ipconfig`. Look for your IPv4 address (e.g., `10.0.0.188` or `192.168.1.100`).
    - **Mac:** Open Terminal and type `ifconfig | grep inet`. Look for your local IP.
-6. **Restart your TV** (power off and back on). You should see "DEVELOP MODE" at the top of the Apps panel.
+   - **Or** just ask Claude Code: `what is my local IP address?`
+6. **Restart your TV** — hold the power button on your remote until the TV turns off and back on. You should see "DEVELOP MODE" at the top of the Apps panel.
 
 > **Tip:** If the `12345` dialog doesn't appear, make sure you're in the **Apps** section (not the home screen) and try typing the code slowly.
 
