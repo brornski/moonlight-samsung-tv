@@ -55,6 +55,7 @@ Tizen Studio is Samsung's development toolkit. You only need it to push the app 
 2. During installation, you only need the **Tizen SDK tools** — you can skip optional packages to save space.
 3. After installation, note where it was installed (default: `C:\tizen-studio` on Windows, `~/tizen-studio` on Mac/Linux).
 4. Open the **Tizen Studio Package Manager** and make sure **Samsung Certificate Extension** is installed under the Extensions tab.
+5. I reccomend doing this with your PC hooked up via HDMI to your TV so you can easily switch back and forth from sunshine to moonlight instead of running through your house for the code or any changes.
 
 ### Step 2: Create a Samsung Certificate
 
