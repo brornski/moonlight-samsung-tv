@@ -226,6 +226,14 @@ MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL="*" sdb connect YOUR_TV_IP
 ```
 Or use **Command Prompt** or **PowerShell** instead of Git Bash.
 
+## FAQ
+
+#### Can this be done on Roku TVs?
+No. Roku is a closed platform — there's no way to sideload apps onto it. Samsung TVs run Tizen OS, which supports Developer Mode and allows you to install unsigned apps via Tizen Studio. Roku has no equivalent. There's no developer mode, no sdb, no way to push a custom app to the device.
+
+#### Can't I just buy a Fire Stick and download Moonlight from there?
+Yes.
+
 ## Build from Source
 - Install the Pepper SDK
 - Clone the repo and run `make`
