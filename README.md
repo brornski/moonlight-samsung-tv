@@ -111,32 +111,17 @@ Tizen Studio is Samsung's development toolkit. You only need it to push the app 
 1. Download **[Tizen Studio](https://developer.tizen.org/development/tizen-studio/download/)** and run the installer.
 2. During installation, you only need the **Tizen SDK tools** — you can skip optional packages to save space.
 3. After installation, note where it was installed (default: `C:\tizen-studio` on Windows, `~/tizen-studio` on Mac/Linux).
-4. Open the **Tizen Studio Package Manager** and make sure **Samsung Certificate Extension** is installed under the Extensions tab.
-5. I reccomend doing this with your PC hooked up via HDMI to your TV so you can easily switch back and forth from sunshine to moonlight instead of running through your house for the code or any changes.
+4. I recommend doing this with your PC hooked up via HDMI to your TV so you can easily switch back and forth from Sunshine to Moonlight instead of running through your house for the code or any changes.
 
-#### Step 2: Create a Samsung Certificate
-
-Your TV will only run sideloaded apps that are signed with a certificate. You need to create one the first time.
-
-1. Open **Tizen Studio** and go to **Tools > Certificate Manager**.
-2. Click the **+** button to create a new certificate profile.
-3. Select **Samsung** as the certificate type.
-4. For the **Author Certificate**, select **Create a new author certificate**. Enter any name and password you'll remember.
-5. You'll need to sign in with a **Samsung account**. If you don't have one, create one at [account.samsung.com](https://account.samsung.com).
-6. For the **Distributor Certificate**, select **Use the default distributor certificate**.
-7. Click **Finish**. Your certificate profile is now active.
-
-> **Important:** The certificate is tied to your PC. You can only update or reinstall the app from the same computer you created the certificate on. If you switch PCs, you'll need to uninstall the app from the TV first and create a new certificate.
-
-#### Step 3: Enable Developer Mode on Your TV
+#### Step 2: Enable Developer Mode on Your TV
 
 See [How to Enable Developer Mode](#how-to-enable-developer-mode) below.
 
-#### Step 4: Find Your TV's IP Address
+#### Step 3: Find Your TV's IP Address
 
 See [How to Find Your TV's IP Address](#how-to-find-your-tvs-ip-address) below.
 
-#### Step 5: Connect to Your TV
+#### Step 4: Connect to Your TV
 
 Open a terminal/command prompt on your PC and navigate to the Tizen Studio tools directory:
 
@@ -162,7 +147,7 @@ sdb devices
 
 You should see your TV listed as a connected device. If it says `offline`, try restarting your TV and reconnecting.
 
-#### Step 6: Download and Install the App
+#### Step 5: Download and Install the App
 
 1. Download the latest **`MoonlightNaCl.wgt`** from the [Releases](https://github.com/brornski/moonlight-samsung-tv/releases) page.
 
@@ -182,7 +167,7 @@ You should see your TV listed as a connected device. If it says `offline`, try r
 
 3. On your TV, open the **Apps** panel. Moonlight should appear in your app list.
 
-#### Step 7: Pair with Sunshine
+#### Step 6: Pair with Sunshine
 
 1. Make sure **[Sunshine](https://github.com/LizardByte/Sunshine)** is running on your host PC. You can access its web UI at `https://localhost:47990`.
 2. Open **Moonlight** on your TV.
