@@ -8,7 +8,7 @@ Built and tested on the **Samsung UN75RU9000FXZA** (2019, Tizen 5.0) with the **
 
 The stock Moonlight NaCl app - sideloaded via tizen studio - has no way to exit a stream or change settings using the Samsung OneRemote. Created due to multiple blackscreens changing resolution, and the inability to return to the landing screen of moonlight. This fork fixes that:
 
-- **Back button exits the stream** - Press Return/Back on your remote to leave a stream and return to the app list. The original app had no way to do this on the OneRemote.
+- **Back button exits the stream** - Press Return/Back on your remote to stop streaming and return to Moonlight's home screen. The original app had no way to do this on the OneRemote.
 - **In-stream settings overlay** - Press Play/Pause during a stream to open a settings panel. Change resolution, framerate, and bitrate without reinstalling the app.
 - **15-second auto-exit** - If no video is received within 15 seconds (black screen), the app automatically exits the stream so you never get stuck.
 
