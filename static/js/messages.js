@@ -1,5 +1,6 @@
 var callbacks = {}
 var callbacks_ids = 1;
+var nativePlayerActive = false;
 
 /**
  * var sendMessage - Sends a message with arguments to the NaCl module
@@ -71,12 +72,17 @@ function handleMessage(msg) {
     } else if (msg.data === 'Connection Established') {
       clearStreamTimeout();
       $('#loadingSpinner').css('display', 'none');
-      $('body').css('backgroundColor', 'black');
+      if (!nativePlayerActive) {
+        $('body').css('backgroundColor', 'black');
+      }
 
       // Keep the display awake while streaming
       // if (runningOnChrome) {
       //   chrome.power.requestKeepAwake("display");
       // }
+    } else if (msg.data === 'nativePlayerActive') {
+      nativePlayerActive = true;
+      $('html, body, #main-content, #listener').css('background', 'transparent');
     } else if (msg.data.indexOf('ProgressMsg: ') === 0) {
       $('#loadingMessage').text(msg.data.replace('ProgressMsg: ', ''));
     } else if (msg.data.indexOf('TransientMsg: ') === 0) {
