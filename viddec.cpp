@@ -39,10 +39,11 @@ static unsigned int s_LastPresentationTimeMs;
 static NaClPlayer::TimeTicks s_LastPacketPts;
 static uint64_t s_NextAppendErrorLogMs;
 static uint64_t s_PlayStartMs;
+#ifdef MOONLIGHT_DIAG
 static uint64_t s_NextClockLogMs;
 static uint32_t s_DiagFrames, s_DiagNonRefFrames, s_DiagMaxBytes;
 static uint32_t s_DiagMinBytes = 0xFFFFFFFF;
-volatile unsigned int s_PadTargetBytes = 0;
+#endif
 
 struct PlayerThreadWork {
     bool setup;
@@ -123,7 +124,9 @@ static int SetupNaClPlayer(int width, int height, int frameRate) {
         return -1;
     }
     s_PlayStartMs = LiGetMillis();
+#ifdef MOONLIGHT_DIAG
     s_NextClockLogMs = 0;
+#endif
 
     g_Instance->PostMessage(pp::Var("nativePlayerActive"));
     g_Instance->PostMessage(pp::Var("displayVideo"));
@@ -436,6 +439,7 @@ static void WriteSpsNalu(PLENTRY nalu, unsigned char* outBuffer, unsigned int* o
                   (unsigned char *)&nalu->data[start_len],
                   nalu->length - start_len);
     
+#ifdef MOONLIGHT_DIAG
     if (!s_LoggedSps) {
         MoonlightInstance::ClLogMessage("SPS from host: profile=%d level=%d refs=%d vui=%d restriction=%d reorder=%d dec_buffering=%d\n",
                                         stream->sps->profile_idc, stream->sps->level_idc, stream->sps->num_ref_frames,
@@ -443,6 +447,7 @@ static void WriteSpsNalu(PLENTRY nalu, unsigned char* outBuffer, unsigned int* o
                                         stream->sps->vui.num_reorder_frames, stream->sps->vui.max_dec_frame_buffering);
         s_LoggedSps = true;
     }
+#endif
 
     // Fixup the SPS to what OS X needs to use hardware acceleration
     stream->sps->num_ref_frames = 1;
@@ -520,27 +525,7 @@ int MoonlightInstance::VidDecSubmitDecodeUnit(PDECODE_UNIT decodeUnit) {
         if (packet.pts <= s_LastPacketPts) {
             packet.pts = s_LastPacketPts + 0.001;
         }
-        // Pad small frames with an H.264 filler-data NAL (type 12, ignored by decoders).
-        // The player appears to batch input before decoding, so tiny frames (e.g. only the
-        // mouse cursor moved) sit undisplayed until enough data accumulates.
-        unsigned int padTarget = s_PadTargetBytes;
-        if (padTarget > offset + 6) {
-            if (padTarget > s_DecodeBufferLength) {
-                unsigned char* grown = (unsigned char*)realloc(s_DecodeBuffer, padTarget);
-                if (grown != NULL) {
-                    s_DecodeBuffer = grown;
-                    s_DecodeBufferLength = padTarget;
-                }
-            }
-            if (padTarget <= s_DecodeBufferLength) {
-                static const unsigned char fillerHeader[] = { 0x00, 0x00, 0x00, 0x01, 0x0C };
-                memcpy(&s_DecodeBuffer[offset], fillerHeader, sizeof(fillerHeader));
-                memset(&s_DecodeBuffer[offset + sizeof(fillerHeader)], 0xFF, padTarget - offset - sizeof(fillerHeader) - 1);
-                s_DecodeBuffer[padTarget - 1] = 0x80; // rbsp_trailing_bits
-                offset = padTarget;
-            }
-        }
-
+#ifdef MOONLIGHT_DIAG
         // Diagnostics: classify the frame by its first slice NAL (reference or not)
         for (unsigned int i = 0; i + 3 < offset; i++) {
             if (s_DecodeBuffer[i] == 0 && s_DecodeBuffer[i + 1] == 0 && s_DecodeBuffer[i + 2] == 1) {
@@ -567,6 +552,7 @@ int MoonlightInstance::VidDecSubmitDecodeUnit(PDECODE_UNIT decodeUnit) {
             s_DiagMinBytes = 0xFFFFFFFF;
             s_NextClockLogMs = nowMs + 1000;
         }
+#endif
         s_LastPresentationTimeMs = decodeUnit->presentationTimeMs;
         s_LastPacketPts = packet.pts;
         packet.dts = packet.pts;

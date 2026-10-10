@@ -1,5 +1,7 @@
 #include "diagstats.h"
 
+#ifdef MOONLIGHT_DIAG
+
 #include <Limelight.h>
 
 #include <pthread.h>
@@ -146,3 +148,5 @@ bool MaybeFormatReport(char* buf, size_t len) {
 }
 
 }  // namespace diag
+
+#endif  // MOONLIGHT_DIAG

@@ -147,10 +147,12 @@ void* MoonlightInstance::InputThreadFunc(void* context) {
         me->PollGamepads();
         me->ReportMouseMovement();
 
+#ifdef MOONLIGHT_DIAG
         char report[512];
         if (diag::MaybeFormatReport(report, sizeof(report))) {
             me->PostMessage(pp::Var(std::string("LogMsg: STATS ") + report));
         }
+#endif
 
         // Poll every 5 ms
         usleep(5 * 1000);
@@ -228,19 +230,6 @@ void MoonlightInstance::HandleMessage(const pp::Var& var_message) {
     } else if (strcmp(method.c_str(), "setLegacyRenderer") == 0) {
         s_ForceLegacyRenderer = params.Get(0).AsString() == "1";
         ClLogMessage("Legacy renderer forced: %d (applies to the next stream)\n", s_ForceLegacyRenderer);
-    } else if (strcmp(method.c_str(), "setPadBytes") == 0) {
-        extern volatile unsigned int s_PadTargetBytes;
-        s_PadTargetBytes = (unsigned int)atoi(params.Get(0).AsString().c_str());
-        ClLogMessage("Frame padding target set to %u bytes\n", s_PadTargetBytes);
-    } else if (strcmp(method.c_str(), "probeNaClPlayer") == 0) {
-        Samsung::NaClPlayer::MediaPlayer defaultPlayer(
-            Samsung::NaClPlayer::MediaPlayer::DoNotBindPlayerToDisplay,
-            Samsung::NaClPlayer::MediaPlayer::MediaPlayerModeDefault);
-        Samsung::NaClPlayer::MediaPlayer lowLatencyPlayer(
-            Samsung::NaClPlayer::MediaPlayer::DoNotBindPlayerToDisplay,
-            Samsung::NaClPlayer::MediaPlayer::MediaPlayerModeLowLatency);
-        ClLogMessage("NaClPlayer probe: default=%d lowLatency=%d\n",
-                     defaultPlayer.IsValid(), lowLatencyPlayer.IsValid());
     } else {
         pp::Var response("Unhandled message received: " + method);
         PostMessage(response);

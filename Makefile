@@ -24,6 +24,11 @@ LIBS = nacl_player ppapi_gles2 ppapi ppapi_cpp pthread curl z ssl crypto nacl_io
 CFLAGS += -Wall $(COMMON_C_C_FLAGS) $(OPUS_C_FLAGS)
 CXXFLAGS += -Wall -std=gnu++11
 
+# Streaming diagnostics (STATS lines, per-frame classification): make DIAG=1
+ifdef DIAG
+CXXFLAGS += -DMOONLIGHT_DIAG
+endif
+
 SOURCES = \
     $(OPUS_SOURCE)           \
     $(H264BS_SOURCE)         \

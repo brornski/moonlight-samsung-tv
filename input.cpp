@@ -207,7 +207,9 @@ bool MoonlightInstance::TryHandleNativeTouchEvent(const pp::InputEvent& event) {
 }
 
 bool MoonlightInstance::HandleInputEvent(const pp::InputEvent& event) {
+#ifdef MOONLIGHT_DIAG
     diag::OnInputEvent((pp::Module::Get()->core()->GetTimeTicks() - event.GetTimeStamp()) * 1000.0);
+#endif
 
     // If the host can handle native touch events, send them natively
     if (TryHandleNativeTouchEvent(event)) {
