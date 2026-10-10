@@ -1,6 +1,8 @@
 #include "moonlight.hpp"
+#include "diagstats.h"
 
 #include "ppapi/c/ppb_input_event.h"
+#include "ppapi/cpp/core.h"
 #include "ppapi/cpp/mouse_cursor.h"
 
 #include "ppapi/cpp/input_event.h"
@@ -205,6 +207,8 @@ bool MoonlightInstance::TryHandleNativeTouchEvent(const pp::InputEvent& event) {
 }
 
 bool MoonlightInstance::HandleInputEvent(const pp::InputEvent& event) {
+    diag::OnInputEvent((pp::Module::Get()->core()->GetTimeTicks() - event.GetTimeStamp()) * 1000.0);
+
     // If the host can handle native touch events, send them natively
     if (TryHandleNativeTouchEvent(event)) {
         return true;

@@ -56,6 +56,7 @@ class MoonlightInstance : public pp::Instance, public pp::MouseLock {
         explicit MoonlightInstance(PP_Instance instance) :
             pp::Instance(instance),
             pp::MouseLock(this),
+            m_UseNaClPlayer(false),
             m_HasNextPicture(false),
             m_IsPainting(false),
             m_OpusDecoder(NULL),
@@ -71,7 +72,14 @@ class MoonlightInstance : public pp::Instance, public pp::MouseLock {
             m_HttpThreadPoolSequence(0) {
             // This function MUST be used otherwise sockets don't work (nacl_io_init() doesn't work!)            
             nacl_io_init_ppapi(pp_instance(), pp::Module::Get()->get_browser_interface());
-            
+
+            m_Running = false;
+            m_ConnectionThreadActive = false;
+            m_InputThreadActive = false;
+            m_StopInProgress = false;
+            m_HasPendingStart = false;
+            m_PendingStartCallbackId = 0;
+
             LiInitializeStreamConfiguration(&m_StreamConfig);
                 
             pp::TextInputController(this).SetTextInputType(PP_TEXTINPUT_TYPE_NONE);
@@ -82,9 +90,19 @@ class MoonlightInstance : public pp::Instance, public pp::MouseLock {
                 m_HttpThreadPool[i] = new pp::SimpleThread(this);
                 m_HttpThreadPool[i]->Start();
             }
+
+            m_PlayerThread = new pp::SimpleThread(this);
+            if (!m_PlayerThread->Start()) {
+                delete m_PlayerThread;
+                m_PlayerThread = NULL;
+            }
         }
         
         virtual ~MoonlightInstance() {
+            if (m_PlayerThread != NULL) {
+                m_PlayerThread->Join();
+                delete m_PlayerThread;
+            }
             for (int i = 0; i < HTTP_HANDLER_THREADS; i++) {
                 m_HttpThreadPool[i]->Join();
                 delete m_HttpThreadPool[i];
@@ -116,6 +134,7 @@ class MoonlightInstance : public pp::Instance, public pp::MouseLock {
         
         void OnConnectionStopped(uint32_t unused);
         void OnConnectionStarted(uint32_t error);
+        void OnStopComplete(int32_t unused);
         void StopConnection();
 
         static uint32_t ProfilerGetPackedMillis();
@@ -185,7 +204,17 @@ class MoonlightInstance : public pp::Instance, public pp::MouseLock {
         
         pthread_t m_ConnectionThread;
         pthread_t m_InputThread;
-    
+        bool m_ConnectionThreadActive;
+        bool m_InputThreadActive;
+
+        // Teardown runs on a background thread. A start request that arrives
+        // before it finishes is parked here and issued once teardown completes.
+        bool m_StopInProgress;
+        bool m_HasPendingStart;
+        int32_t m_PendingStartCallbackId;
+        pp::VarArray m_PendingStartArgs;
+
+        bool m_UseNaClPlayer;
         pp::Graphics3D m_Graphics3D;
         pp::VideoDecoder* m_VideoDecoder;
         Shader m_Texture2DShader;
@@ -211,6 +240,7 @@ class MoonlightInstance : public pp::Instance, public pp::MouseLock {
         PP_TimeTicks m_LastTouchUpTime;
         pp::FloatPoint m_LastTouchUpPoint;
     
+        pp::SimpleThread* m_PlayerThread;
         pp::SimpleThread* m_HttpThreadPool[HTTP_HANDLER_THREADS];
         uint32_t m_HttpThreadPoolSequence;
 };

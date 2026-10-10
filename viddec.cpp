@@ -1,20 +1,188 @@
 #include "moonlight.hpp"
+#include "diagstats.h"
 
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
 
 #include "ppapi/lib/gl/gles2/gl2ext_ppapi.h"
 
+#include "nacl_player/media_player.h"
+#include "nacl_player/es_data_source.h"
+
 #include <h264_stream.h>
 
+#include <pthread.h>
+#include <unistd.h>
+
 #define INITIAL_DECODE_BUFFER_LEN 128 * 1024
+
+#define HW_DECODER_INIT_ATTEMPTS 15
+#define HW_DECODER_RETRY_DELAY_MS 200
 
 static unsigned char* s_DecodeBuffer;
 static unsigned int s_DecodeBufferLength;
 static int s_LastTextureType;
 static int s_LastTextureId;
 static bool s_FirstFrameDisplayed;
+static bool s_LoggedSps;
 static uint64_t s_LastPaintFinishedTime;
+
+namespace NaClPlayer = Samsung::NaClPlayer;
+
+static std::unique_ptr<NaClPlayer::MediaPlayer> s_NaClPlayer;
+static std::unique_ptr<NaClPlayer::ESDataSource> s_PlayerDataSource;
+static std::unique_ptr<NaClPlayer::VideoElementaryStream> s_PlayerStream;
+static bool s_PlayerDataSourceAttached;
+static int s_PlayerFrameRate;
+static unsigned int s_FirstPresentationTimeMs;
+static unsigned int s_LastPresentationTimeMs;
+static NaClPlayer::TimeTicks s_LastPacketPts;
+static uint64_t s_NextAppendErrorLogMs;
+static uint64_t s_PlayStartMs;
+static uint64_t s_NextClockLogMs;
+static uint32_t s_DiagFrames, s_DiagNonRefFrames, s_DiagMaxBytes;
+static uint32_t s_DiagMinBytes = 0xFFFFFFFF;
+volatile unsigned int s_PadTargetBytes = 0;
+
+struct PlayerThreadWork {
+    bool setup;
+    int width;
+    int height;
+    int frameRate;
+    pthread_mutex_t mutex;
+    pthread_cond_t condition;
+    bool complete;
+    int result;
+};
+
+static void CleanupNaClPlayer() {
+    if (s_PlayerDataSourceAttached) {
+        int32_t result = s_NaClPlayer->Stop();
+        MoonlightInstance::ClLogMessage("NaClPlayer: Stop=%d\n", result);
+    }
+
+    s_PlayerStream.reset();
+    // AttachDataSource takes a reference with no nullable overload. Destroying
+    // the source and player releases the attachment along with their resources.
+    s_PlayerDataSource.reset();
+    s_NaClPlayer.reset();
+    s_PlayerDataSourceAttached = false;
+}
+
+static int SetupNaClPlayer(int width, int height, int frameRate) {
+    if (frameRate <= 0) {
+        MoonlightInstance::ClLogMessage("NaClPlayer: invalid frame rate=%d\n", frameRate);
+        return -1;
+    }
+
+    s_PlayerFrameRate = frameRate;
+    s_FirstPresentationTimeMs = 0;
+    s_LastPresentationTimeMs = 0;
+    s_LastPacketPts = -1.0;
+    s_NextAppendErrorLogMs = 0;
+
+    s_NaClPlayer.reset(new NaClPlayer::MediaPlayer(
+        NaClPlayer::MediaPlayer::BindPlayerToDisplay,
+        NaClPlayer::MediaPlayer::MediaPlayerModeLowLatency));
+    bool valid = s_NaClPlayer->IsValid();
+    MoonlightInstance::ClLogMessage("NaClPlayer: IsValid=%d\n", valid);
+    if (!valid) {
+        return -1;
+    }
+
+    s_PlayerDataSource.reset(new NaClPlayer::ESDataSource());
+    s_PlayerStream.reset(new NaClPlayer::VideoElementaryStream());
+    int32_t result = s_PlayerDataSource->AddStream<NaClPlayer::VideoElementaryStream>(
+        *s_PlayerStream, nullptr);
+    MoonlightInstance::ClLogMessage("NaClPlayer: AddStream=%d\n", result);
+    if (result != NaClPlayer::ErrorCodes::Success) {
+        return -1;
+    }
+
+    s_PlayerStream->SetVideoCodecType(NaClPlayer::VIDEOCODEC_TYPE_H264);
+    s_PlayerStream->SetVideoCodecProfile(NaClPlayer::VIDEOCODEC_PROFILE_H264_HIGH);
+    s_PlayerStream->SetVideoFrameFormat(NaClPlayer::VIDEOFRAME_FORMAT_I420);
+    s_PlayerStream->SetVideoFrameSize(NaClPlayer::Size(width, height));
+    s_PlayerStream->SetFrameRate(NaClPlayer::Rational(frameRate, 1));
+    result = s_PlayerStream->InitializeDone();
+    MoonlightInstance::ClLogMessage("NaClPlayer: InitializeDone=%d\n", result);
+    if (result != NaClPlayer::ErrorCodes::Success) {
+        return -1;
+    }
+
+    result = s_NaClPlayer->AttachDataSource(*s_PlayerDataSource);
+    MoonlightInstance::ClLogMessage("NaClPlayer: AttachDataSource=%d\n", result);
+    if (result != NaClPlayer::ErrorCodes::Success) {
+        return -1;
+    }
+    s_PlayerDataSourceAttached = true;
+
+    result = s_NaClPlayer->Play();
+    MoonlightInstance::ClLogMessage("NaClPlayer: Play=%d\n", result);
+    if (result != NaClPlayer::ErrorCodes::Success) {
+        return -1;
+    }
+    s_PlayStartMs = LiGetMillis();
+    s_NextClockLogMs = 0;
+
+    g_Instance->PostMessage(pp::Var("nativePlayerActive"));
+    g_Instance->PostMessage(pp::Var("displayVideo"));
+    return 0;
+}
+
+static void PlayerThreadCallback(void* userData, int32_t result) {
+    PlayerThreadWork* work = static_cast<PlayerThreadWork*>(userData);
+    int workResult = -1;
+    if (result == PP_OK) {
+        if (work->setup) {
+            workResult = SetupNaClPlayer(work->width, work->height, work->frameRate);
+            if (workResult != 0) {
+                CleanupNaClPlayer();
+            }
+        }
+        else {
+            CleanupNaClPlayer();
+            workResult = 0;
+        }
+    }
+    else {
+        MoonlightInstance::ClLogMessage("NaClPlayer: player thread callback=%d\n", result);
+    }
+
+    pthread_mutex_lock(&work->mutex);
+    work->result = workResult;
+    work->complete = true;
+    pthread_cond_signal(&work->condition);
+    pthread_mutex_unlock(&work->mutex);
+}
+
+static int RunPlayerThreadWork(pp::SimpleThread* thread, bool setup,
+                              int width = 0, int height = 0, int frameRate = 0) {
+    if (thread == NULL) {
+        MoonlightInstance::ClLogMessage("NaClPlayer: player thread unavailable\n");
+        return -1;
+    }
+
+    PlayerThreadWork work = {
+        setup, width, height, frameRate,
+        PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER, false, -1
+    };
+    pthread_mutex_lock(&work.mutex);
+    int32_t result = thread->message_loop().PostWork(
+        pp::CompletionCallback(&PlayerThreadCallback, &work));
+    if (result == PP_OK) {
+        while (!work.complete) {
+            pthread_cond_wait(&work.condition, &work.mutex);
+        }
+    }
+    else {
+        MoonlightInstance::ClLogMessage("NaClPlayer: PostWork=%d\n", result);
+    }
+    pthread_mutex_unlock(&work.mutex);
+    pthread_cond_destroy(&work.condition);
+    pthread_mutex_destroy(&work.mutex);
+    return work.result;
+}
 
 #define assertNoGLError() assert(!glGetError())
 
@@ -138,24 +306,55 @@ bool MoonlightInstance::InitializeRenderingSurface(int width, int height) {
 }
 
 int MoonlightInstance::VidDecSetup(int videoFormat, int width, int height, int redrawRate, void* context, int drFlags) {
-    g_Instance->m_VideoDecoder = new pp::VideoDecoder(g_Instance);
+    if (!g_Instance->m_UseNaClPlayer) {
+        g_Instance->m_VideoDecoder = new pp::VideoDecoder(g_Instance);
+    }
     
     s_DecodeBufferLength = INITIAL_DECODE_BUFFER_LEN;
     s_DecodeBuffer = (unsigned char *)malloc(s_DecodeBufferLength);
     s_LastTextureType = 0;
     s_LastTextureId = 0;
     s_FirstFrameDisplayed = false;
-    
+    s_LoggedSps = false;
+    diag::Reset();
+
+    if (g_Instance->m_UseNaClPlayer) {
+        if (s_DecodeBuffer == NULL) {
+            ClLogMessage("NaClPlayer: unable to allocate decode buffer\n");
+            s_DecodeBufferLength = 0;
+            return -1;
+        }
+        int result = RunPlayerThreadWork(g_Instance->m_PlayerThread, true, width, height, redrawRate);
+        if (result != 0) {
+            free(s_DecodeBuffer);
+            s_DecodeBuffer = NULL;
+            s_DecodeBufferLength = 0;
+        }
+        return result;
+    }
+
     int32_t err;
 
     if (!(drFlags & DR_FLAG_FORCE_SW_DECODE)) {
-        // Try to initialize hardware decoding only
-        err = g_Instance->m_VideoDecoder->Initialize(
-           g_Instance->m_Graphics3D,
-           PP_VIDEOPROFILE_H264HIGH,
-           PP_HARDWAREACCELERATION_ONLY,
-           0,
-           pp::BlockUntilComplete());
+        // Try to initialize hardware decoding only. The TV has a single hardware
+        // decoder, and the previous stream's instance is released asynchronously,
+        // so retry briefly rather than dropping to (unusably slow) CPU decoding.
+        for (int attempt = 1; attempt <= HW_DECODER_INIT_ATTEMPTS; attempt++) {
+            err = g_Instance->m_VideoDecoder->Initialize(
+               g_Instance->m_Graphics3D,
+               PP_VIDEOPROFILE_H264HIGH,
+               PP_HARDWAREACCELERATION_ONLY,
+               0,
+               pp::BlockUntilComplete());
+            if (err != PP_ERROR_NOTSUPPORTED) {
+                break;
+            }
+
+            ClLogMessage("Hardware decoder busy (attempt %d of %d)\n", attempt, HW_DECODER_INIT_ATTEMPTS);
+            usleep(HW_DECODER_RETRY_DELAY_MS * 1000);
+            delete g_Instance->m_VideoDecoder;
+            g_Instance->m_VideoDecoder = new pp::VideoDecoder(g_Instance);
+        }
     }
     else {
         err = PP_ERROR_NOTSUPPORTED;
@@ -195,6 +394,14 @@ void MoonlightInstance::DispatchGetPicture(uint32_t unused) {
 }
 
 void MoonlightInstance::VidDecCleanup(void) {
+    if (g_Instance->m_UseNaClPlayer) {
+        RunPlayerThreadWork(g_Instance->m_PlayerThread, false);
+        free(s_DecodeBuffer);
+        s_DecodeBuffer = NULL;
+        s_DecodeBufferLength = 0;
+        return;
+    }
+
     free(s_DecodeBuffer);
     
     // Delete the decoder
@@ -229,8 +436,30 @@ static void WriteSpsNalu(PLENTRY nalu, unsigned char* outBuffer, unsigned int* o
                   (unsigned char *)&nalu->data[start_len],
                   nalu->length - start_len);
     
+    if (!s_LoggedSps) {
+        MoonlightInstance::ClLogMessage("SPS from host: profile=%d level=%d refs=%d vui=%d restriction=%d reorder=%d dec_buffering=%d\n",
+                                        stream->sps->profile_idc, stream->sps->level_idc, stream->sps->num_ref_frames,
+                                        stream->sps->vui_parameters_present_flag, stream->sps->vui.bitstream_restriction_flag,
+                                        stream->sps->vui.num_reorder_frames, stream->sps->vui.max_dec_frame_buffering);
+        s_LoggedSps = true;
+    }
+
     // Fixup the SPS to what OS X needs to use hardware acceleration
     stream->sps->num_ref_frames = 1;
+
+    // Declare that frames are never reordered and only one needs buffering.
+    // Without bitstream restrictions the decoder must assume the worst case
+    // and holds several frames before outputting each one, adding latency.
+    stream->sps->vui_parameters_present_flag = 1;
+    if (!stream->sps->vui.bitstream_restriction_flag) {
+        stream->sps->vui.bitstream_restriction_flag = 1;
+        stream->sps->vui.motion_vectors_over_pic_boundaries_flag = 1;
+        stream->sps->vui.max_bytes_per_pic_denom = 2;
+        stream->sps->vui.max_bits_per_mb_denom = 1;
+        stream->sps->vui.log2_max_mv_length_horizontal = 16;
+        stream->sps->vui.log2_max_mv_length_vertical = 16;
+    }
+    stream->sps->vui.num_reorder_frames = 0;
     stream->sps->vui.max_dec_frame_buffering = 1;
     
     // Copy the NALU prefix over from the original SPS
@@ -275,12 +504,103 @@ int MoonlightInstance::VidDecSubmitDecodeUnit(PDECODE_UNIT decodeUnit) {
         
         entry = entry->next;
     }
+
+    if (g_Instance->m_UseNaClPlayer) {
+        if (s_LastPacketPts < 0.0) {
+            s_FirstPresentationTimeMs = decodeUnit->presentationTimeMs;
+        }
+
+        NaClPlayer::ESPacket packet;
+        packet.duration = 1.0 / s_PlayerFrameRate;
+        // Stamp each frame with the player's own running time (time since Play()).
+        // Host-relative timestamps start at 0 while the player clock has already
+        // been running since setup, so every frame would arrive "late" and be dropped.
+        uint64_t nowMs = LiGetMillis();
+        packet.pts = (nowMs - s_PlayStartMs) / 1000.0;
+        if (packet.pts <= s_LastPacketPts) {
+            packet.pts = s_LastPacketPts + 0.001;
+        }
+        // Pad small frames with an H.264 filler-data NAL (type 12, ignored by decoders).
+        // The player appears to batch input before decoding, so tiny frames (e.g. only the
+        // mouse cursor moved) sit undisplayed until enough data accumulates.
+        unsigned int padTarget = s_PadTargetBytes;
+        if (padTarget > offset + 6) {
+            if (padTarget > s_DecodeBufferLength) {
+                unsigned char* grown = (unsigned char*)realloc(s_DecodeBuffer, padTarget);
+                if (grown != NULL) {
+                    s_DecodeBuffer = grown;
+                    s_DecodeBufferLength = padTarget;
+                }
+            }
+            if (padTarget <= s_DecodeBufferLength) {
+                static const unsigned char fillerHeader[] = { 0x00, 0x00, 0x00, 0x01, 0x0C };
+                memcpy(&s_DecodeBuffer[offset], fillerHeader, sizeof(fillerHeader));
+                memset(&s_DecodeBuffer[offset + sizeof(fillerHeader)], 0xFF, padTarget - offset - sizeof(fillerHeader) - 1);
+                s_DecodeBuffer[padTarget - 1] = 0x80; // rbsp_trailing_bits
+                offset = padTarget;
+            }
+        }
+
+        // Diagnostics: classify the frame by its first slice NAL (reference or not)
+        for (unsigned int i = 0; i + 3 < offset; i++) {
+            if (s_DecodeBuffer[i] == 0 && s_DecodeBuffer[i + 1] == 0 && s_DecodeBuffer[i + 2] == 1) {
+                unsigned char nalType = s_DecodeBuffer[i + 3] & 0x1F;
+                if (nalType == 1 || nalType == 5) {
+                    if (((s_DecodeBuffer[i + 3] >> 5) & 0x3) == 0) {
+                        s_DiagNonRefFrames++;
+                    }
+                    break;
+                }
+            }
+        }
+        s_DiagFrames++;
+        if (offset < s_DiagMinBytes) s_DiagMinBytes = offset;
+        if (offset > s_DiagMaxBytes) s_DiagMaxBytes = offset;
+
+        if (nowMs >= s_NextClockLogMs) {
+            NaClPlayer::TimeTicks clock = -1.0;
+            int32_t clockResult = s_NaClPlayer->GetCurrentTime(clock);
+            ClLogMessage("NaClPlayer: clock=%.3f (r=%d) pts=%.3f frames=%u nonref=%u bytes=%u..%u\n",
+                         clock, clockResult, packet.pts, s_DiagFrames, s_DiagNonRefFrames,
+                         s_DiagMinBytes, s_DiagMaxBytes);
+            s_DiagFrames = s_DiagNonRefFrames = s_DiagMaxBytes = 0;
+            s_DiagMinBytes = 0xFFFFFFFF;
+            s_NextClockLogMs = nowMs + 1000;
+        }
+        s_LastPresentationTimeMs = decodeUnit->presentationTimeMs;
+        s_LastPacketPts = packet.pts;
+        packet.dts = packet.pts;
+        packet.is_key_frame = decodeUnit->frameType == FRAME_TYPE_IDR;
+        packet.size = offset;
+        packet.buffer = s_DecodeBuffer;
+
+        uint64_t submitStartMs = LiGetMillis();
+        diag::BeginSubmit(submitStartMs);
+        int32_t result = s_PlayerStream->AppendPacket(packet);
+        uint64_t submitEndMs = LiGetMillis();
+        diag::EndSubmit(offset, packet.is_key_frame,
+                        decodeUnit->receiveTimeMs, decodeUnit->enqueueTimeMs,
+                        decodeUnit->frameHostProcessingLatency,
+                        submitStartMs, submitEndMs);
+        if (result != NaClPlayer::ErrorCodes::Success) {
+            if (submitEndMs >= s_NextAppendErrorLogMs) {
+                ClLogMessage("NaClPlayer: AppendPacket=%d\n", result);
+                s_NextAppendErrorLogMs = submitEndMs + 1000;
+            }
+            return DR_NEED_IDR;
+        }
+        return DR_OK;
+    }
     
     // Start the decoding
-    uint32_t packedMillis = ProfilerGetPackedMillis();
-    g_Instance->m_VideoDecoder->Decode(packedMillis, offset, s_DecodeBuffer, pp::BlockUntilComplete());
-    ProfilerPrintPackedDeltaFromNow("Decode (blocking)", packedMillis);
-    
+    uint64_t submitStartMs = LiGetMillis();
+    uint32_t decodeId = diag::BeginSubmit(submitStartMs);
+    g_Instance->m_VideoDecoder->Decode(decodeId, offset, s_DecodeBuffer, pp::BlockUntilComplete());
+    diag::EndSubmit(offset, decodeUnit->frameType == FRAME_TYPE_IDR,
+                    decodeUnit->receiveTimeMs, decodeUnit->enqueueTimeMs,
+                    decodeUnit->frameHostProcessingLatency,
+                    submitStartMs, LiGetMillis());
+
     return DR_OK;
 }
 
@@ -334,7 +654,9 @@ void MoonlightInstance::PaintPicture(void) {
         m_IsPainting = false;
         return;
     }
-    
+
+    diag::OnPaintStart();
+
     // Calling glClear() once per frame is recommended for modern
     // GPUs which use it for state tracking hints.
     glClear(GL_COLOR_BUFFER_BIT);
@@ -387,6 +709,7 @@ void MoonlightInstance::PaintPicture(void) {
 
 void MoonlightInstance::PaintFinished(int32_t result) {
     m_IsPainting = false;
+    diag::OnPaintFinished();
 
     if (!s_FirstFrameDisplayed) {
         // Tell the JS code to display the video stream now
@@ -414,8 +737,8 @@ void MoonlightInstance::PictureReady(int32_t result, PP_VideoPicture picture) {
         return;
     }
     
-    ProfilerPrintPackedDeltaFromNow("Decode -> PictureReady", picture.decode_id);
-    
+    diag::OnPictureReady(picture.decode_id, m_HasNextPicture);
+
     // Free a picture if there's one the renderer hasn't consumed yet
     if (m_HasNextPicture) {
         ProfilerPrintWarning("Decoder is outpacing renderer!");

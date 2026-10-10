@@ -584,9 +584,16 @@ function showApps(host) {
   showAppsMode();
 }
 
+function restoreStreamBackgrounds() {
+  nativePlayerActive = false;
+  $('body').css('background', '#282C38');
+  $('html, #main-content, #listener').css('background', '');
+}
+
 // set the layout to the initial mode you see when you open moonlight
 function showHostsAndSettingsMode() {
   console.log('%c[index.js]', 'color: green;', 'Entering "Show apps and hosts" mode');
+  restoreStreamBackgrounds();
   $("#main-navigation").show();
   $(".nav-menu-parent").show();
   $("#externalAudioBtn").show();
@@ -617,7 +624,7 @@ function showAppsMode() {
   $("#main-content").removeClass("fullscreen");
   $("#listener").removeClass("fullscreen");
   $('#loadingSpinner').css('display', 'none');
-  $('body').css('backgroundColor', '#282C38');
+  restoreStreamBackgrounds();
 
   isInGame = false;
 
@@ -636,6 +643,9 @@ function startGame(host, appID) {
     console.error('%c[index.js, startGame]', 'color: green;', 'Attempted to start a game, but `host` did not initialize properly. Host object: ', host);
     return;
   }
+
+  // Streaming is a host-specific screen; the stream-ended handler returns to this host's app list
+  api = host;
 
   // refresh the server info, because the user might have quit the game.
   host.refreshServerInfo().then(function (ret) {
@@ -1041,39 +1051,24 @@ function updateDefaultBitrate() {
   var frameRate = $('#selectFramerate').data('value').toString();
 
   // These quality presets include video resolution like 480p, 720p, 1080p, 1440p, 2160p (4K) and video frame rate like 30 FPS and 60 FPS
+  var preset;
   if (res === "858:480") {
-    if (frameRate === "30") { // 480p, 30 FPS
-      $('#bitrateSlider')[0].MaterialSlider.change('2');
-    } else { // 480p, 60 FPS
-      $('#bitrateSlider')[0].MaterialSlider.change('4');
-    }
+    preset = frameRate === "30" ? 2 : 4;
   } else if (res === "1280:720") {
-    if (frameRate === "30") { // 720p, 30 FPS
-      $('#bitrateSlider')[0].MaterialSlider.change('5');
-    } else { // 720p, 60 FPS
-      $('#bitrateSlider')[0].MaterialSlider.change('10');
-    }
+    preset = frameRate === "30" ? 5 : 10;
   } else if (res === "1920:1080") {
-    if (frameRate === "30") { // 1080p, 30 FPS
-      $('#bitrateSlider')[0].MaterialSlider.change('10');
-    } else { // 1080p, 60 FPS
-      $('#bitrateSlider')[0].MaterialSlider.change('20');
-    }
+    preset = frameRate === "30" ? 10 : 20;
   } else if (res === "2560:1440") {
-    if (frameRate === "30") { // 1440p, 30 FPS
-      $('#bitrateSlider')[0].MaterialSlider.change('20');
-    } else { // 1440p, 60 FPS
-      $('#bitrateSlider')[0].MaterialSlider.change('40');
-    }
+    preset = frameRate === "30" ? 20 : 40;
   } else if (res === "3840:2160") {
-    if (frameRate === "30") { // 2160p (4K), 30 FPS
-      $('#bitrateSlider')[0].MaterialSlider.change('40');
-    } else { // 2160p (4K), 60 FPS
-      $('#bitrateSlider')[0].MaterialSlider.change('80');
-    }
+    preset = frameRate === "30" ? 40 : 80;
   } else { // unrecognized option. In case someone screws with the JS to add custom resolutions
-    $('#bitrateSlider')[0].MaterialSlider.change('10');
+    preset = 10;
   }
+
+  // The preset is a floor, not a reset: never silently drop a bitrate the user raised
+  var current = parseFloat($('#bitrateSlider').val()) || 0;
+  $('#bitrateSlider')[0].MaterialSlider.change(String(Math.max(current, preset)));
 
   updateBitrateField();
   saveBitrate();
@@ -1170,7 +1165,7 @@ var overlayResLabels = ['480p', '720p', '1080p', '1440p', '4K'];
 var overlayFramerates = ['30', '60'];
 var overlayFpsLabels = ['30 FPS', '60 FPS'];
 var overlayBitrateMin = 1;
-var overlayBitrateMax = 50;
+var overlayBitrateMax = 100;
 var overlayBitrateStep = 1;
 
 var overlayState = {

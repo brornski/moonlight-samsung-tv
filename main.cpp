@@ -1,4 +1,5 @@
 #include "moonlight.hpp"
+#include "diagstats.h"
 
 #include <pthread.h>
 #include <stdio.h>
@@ -8,6 +9,8 @@
 #include <pairing.h>
 
 #include "ppapi/cpp/input_event.h"
+
+#include "nacl_player/media_player.h"
 
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -23,6 +26,10 @@
 #define MSG_OPENURL "openUrl"
 
 MoonlightInstance* g_Instance;
+
+// Diagnostic override: use the pp::VideoDecoder + GL path even when the
+// low-latency NaCl Player is available.
+static bool s_ForceLegacyRenderer = false;
 
 class MoonlightModule : public pp::Module {
     public:
@@ -68,20 +75,44 @@ void MoonlightInstance::OnConnectionStopped(uint32_t error) {
 
 void MoonlightInstance::StopConnection() {
     pthread_t t;
-    
+
+    // A teardown is already running and will report completion itself
+    if (m_StopInProgress) {
+        return;
+    }
+    m_StopInProgress = true;
+
     // Stopping needs to happen in a separate thread to avoid a potential deadlock
     // caused by us getting a callback to the main thread while inside LiStopConnection.
+    // The front end is only told the stream ended once teardown has finished, so a new
+    // stream can never start while the old decoder and rendering surface are still alive.
     pthread_create(&t, NULL, MoonlightInstance::StopThreadFunc, NULL);
-    
-    // We'll need to call the listener ourselves since our connection terminated callback
-    // won't be invoked for a manually requested termination.
-    OnConnectionStopped(0);
+    pthread_detach(t);
+}
+
+void MoonlightInstance::OnStopComplete(int32_t unused) {
+    m_StopInProgress = false;
+
+    if (m_HasPendingStart) {
+        // The front end has already moved on to the next stream, so don't
+        // report the end of the old one.
+        m_HasPendingStart = false;
+        HandleStartStream(m_PendingStartCallbackId, m_PendingStartArgs);
+    }
+    else {
+        // We'll need to call the listener ourselves since our connection terminated callback
+        // won't be invoked for a manually requested termination.
+        OnConnectionStopped(0);
+    }
 }
 
 void* MoonlightInstance::StopThreadFunc(void* context) {
     // We must join the connection thread first, because LiStopConnection must
     // not be invoked during LiStartConnection.
-    pthread_join(g_Instance->m_ConnectionThread, NULL);
+    if (g_Instance->m_ConnectionThreadActive) {
+        pthread_join(g_Instance->m_ConnectionThread, NULL);
+        g_Instance->m_ConnectionThreadActive = false;
+    }
 
     // Force raise all modifier keys to avoid leaving them down after disconnecting
     LiSendKeyboardEvent(0xA0, KEY_ACTION_UP, 0);
@@ -96,10 +127,16 @@ void* MoonlightInstance::StopThreadFunc(void* context) {
 
     // We also need to stop this thread after the connection thread, because it depends
     // on being initialized there.
-    pthread_join(g_Instance->m_InputThread, NULL);
+    if (g_Instance->m_InputThreadActive) {
+        pthread_join(g_Instance->m_InputThread, NULL);
+        g_Instance->m_InputThreadActive = false;
+    }
 
     // Stop the connection
     LiStopConnection();
+
+    pp::Module::Get()->core()->CallOnMainThread(0,
+        g_Instance->m_CallbackFactory.NewCallback(&MoonlightInstance::OnStopComplete));
     return NULL;
 }
 
@@ -109,7 +146,12 @@ void* MoonlightInstance::InputThreadFunc(void* context) {
     while (me->m_Running) {
         me->PollGamepads();
         me->ReportMouseMovement();
-        
+
+        char report[512];
+        if (diag::MaybeFormatReport(report, sizeof(report))) {
+            me->PostMessage(pp::Var(std::string("LogMsg: STATS ") + report));
+        }
+
         // Poll every 5 ms
         usleep(5 * 1000);
     }
@@ -151,8 +193,9 @@ void* MoonlightInstance::ConnectionThreadFunc(void* context) {
     
     // Set running state before starting connection-specific threads
     me->m_Running = true;
-    
+
     pthread_create(&me->m_InputThread, NULL, MoonlightInstance::InputThreadFunc, me);
+    me->m_InputThreadActive = true;
     
     return NULL;
 }
@@ -182,6 +225,22 @@ void MoonlightInstance::HandleMessage(const pp::Var& var_message) {
         HandlePair(callbackId, params);
     } else if (strcmp(method.c_str(), "STUN") == 0) {
         HandleSTUN(callbackId, params);
+    } else if (strcmp(method.c_str(), "setLegacyRenderer") == 0) {
+        s_ForceLegacyRenderer = params.Get(0).AsString() == "1";
+        ClLogMessage("Legacy renderer forced: %d (applies to the next stream)\n", s_ForceLegacyRenderer);
+    } else if (strcmp(method.c_str(), "setPadBytes") == 0) {
+        extern volatile unsigned int s_PadTargetBytes;
+        s_PadTargetBytes = (unsigned int)atoi(params.Get(0).AsString().c_str());
+        ClLogMessage("Frame padding target set to %u bytes\n", s_PadTargetBytes);
+    } else if (strcmp(method.c_str(), "probeNaClPlayer") == 0) {
+        Samsung::NaClPlayer::MediaPlayer defaultPlayer(
+            Samsung::NaClPlayer::MediaPlayer::DoNotBindPlayerToDisplay,
+            Samsung::NaClPlayer::MediaPlayer::MediaPlayerModeDefault);
+        Samsung::NaClPlayer::MediaPlayer lowLatencyPlayer(
+            Samsung::NaClPlayer::MediaPlayer::DoNotBindPlayerToDisplay,
+            Samsung::NaClPlayer::MediaPlayer::MediaPlayerModeLowLatency);
+        ClLogMessage("NaClPlayer probe: default=%d lowLatency=%d\n",
+                     defaultPlayer.IsValid(), lowLatencyPlayer.IsValid());
     } else {
         pp::Var response("Unhandled message received: " + method);
         PostMessage(response);
@@ -195,6 +254,17 @@ static void hexStringToBytes(const char* str, char* output) {
 }
 
 void MoonlightInstance::HandleStartStream(int32_t callbackId, pp::VarArray args) {
+    // Never start over a previous stream that hasn't been fully torn down: its cleanup
+    // would destroy the new rendering surface, and the hardware decoder may still be held
+    // (forcing a fallback to CPU decoding). Park the request until teardown completes.
+    if (m_StopInProgress || m_ConnectionThreadActive) {
+        m_PendingStartCallbackId = callbackId;
+        m_PendingStartArgs = args;
+        m_HasPendingStart = true;
+        StopConnection();
+        return;
+    }
+
     std::string host = args.Get(0).AsString();
     std::string width = args.Get(1).AsString();
     std::string height = args.Get(2).AsString();
@@ -257,10 +327,21 @@ void MoonlightInstance::HandleStartStream(int32_t callbackId, pp::VarArray args)
     m_RtspUrl = rtspurl;
     m_MouseLockingFeatureEnabled = stoi(mouse_lock);
     
-    // Initialize the rendering surface before starting the connection
-    if (InitializeRenderingSurface(m_StreamConfig.width, m_StreamConfig.height)) {
+    static int lowLatencyPlayerSupported = -1;
+    if (lowLatencyPlayerSupported == -1) {
+        Samsung::NaClPlayer::MediaPlayer probe(
+            Samsung::NaClPlayer::MediaPlayer::DoNotBindPlayerToDisplay,
+            Samsung::NaClPlayer::MediaPlayer::MediaPlayerModeLowLatency);
+        lowLatencyPlayerSupported = probe.IsValid() ? 1 : 0;
+        ClLogMessage("NaClPlayer: low-latency probe=%d\n", lowLatencyPlayerSupported);
+    }
+    m_UseNaClPlayer = lowLatencyPlayerSupported == 1 && !s_ForceLegacyRenderer;
+
+    // The native player renders below the page and needs no Graphics3D surface.
+    if (m_UseNaClPlayer || InitializeRenderingSurface(m_StreamConfig.width, m_StreamConfig.height)) {
         // Start the worker thread to establish the connection
         pthread_create(&m_ConnectionThread, NULL, MoonlightInstance::ConnectionThreadFunc, this);
+        m_ConnectionThreadActive = true;
     } else {
         // Failed to initialize renderer
         OnConnectionStopped(0);
