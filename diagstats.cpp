@@ -10,6 +10,7 @@
 
 #define DIAG_WINDOW_MS 2000
 #define DIAG_RING_SIZE 512
+#define DIAG_GAP_MS 25
 
 namespace diag {
 
@@ -40,6 +41,10 @@ struct Window {
     Stat paint;         // draw + SwapBuffers completion
     Stat inputDelay;    // input event timestamp -> handled by the plugin
     uint32_t picturesDropped;
+    Stat hostInterval;    // gap between consecutive host capture timestamps
+    Stat arrivalInterval; // gap between consecutive frame arrivals here
+    uint32_t hostGaps;    // host gaps >= DIAG_GAP_MS (the host itself paced unevenly)
+    uint32_t arrivalGaps; // arrival gaps >= DIAG_GAP_MS (visible hitch if displayed on arrival)
 };
 
 pthread_mutex_t s_Lock = PTHREAD_MUTEX_INITIALIZER;
@@ -47,6 +52,8 @@ Window s_Window;
 uint64_t s_SubmitTimes[DIAG_RING_SIZE];
 uint32_t s_NextDecodeId;
 uint64_t s_PaintStartMs;
+uint32_t s_LastPresentationMs;
+uint64_t s_LastArrivalMs;
 
 }  // namespace
 
@@ -56,6 +63,25 @@ void Reset() {
     memset(s_SubmitTimes, 0, sizeof(s_SubmitTimes));
     s_Window.startMs = LiGetMillis();
     s_PaintStartMs = 0;
+    s_LastPresentationMs = 0;
+    s_LastArrivalMs = 0;
+    pthread_mutex_unlock(&s_Lock);
+}
+
+void OnFrameTiming(uint32_t presentationTimeMs, uint64_t arrivalMs) {
+    pthread_mutex_lock(&s_Lock);
+    if (s_LastPresentationMs != 0 && presentationTimeMs > s_LastPresentationMs) {
+        uint32_t gap = presentationTimeMs - s_LastPresentationMs;
+        s_Window.hostInterval.Add(gap);
+        if (gap >= DIAG_GAP_MS) s_Window.hostGaps++;
+    }
+    if (s_LastArrivalMs != 0 && arrivalMs >= s_LastArrivalMs) {
+        uint64_t gap = arrivalMs - s_LastArrivalMs;
+        s_Window.arrivalInterval.Add(gap);
+        if (gap >= DIAG_GAP_MS) s_Window.arrivalGaps++;
+    }
+    s_LastPresentationMs = presentationTimeMs;
+    s_LastArrivalMs = arrivalMs;
     pthread_mutex_unlock(&s_Lock);
 }
 
@@ -129,7 +155,8 @@ bool MaybeFormatReport(char* buf, size_t len) {
     snprintf(buf, len,
              "fps=%.1f mbps=%.1f idr=%u host=%llu.%llu/%llu.%llums recv=%llu/%llums qwait=%llu/%llums "
              "decblock=%llu/%llums declat=%llu/%llums paint=%llu/%llums painted=%u dropped=%u "
-             "input=%u delay=%llu/%llums rtt=%u+-%ums",
+             "input=%u delay=%llu/%llums rtt=%u+-%ums "
+             "hostint=%llu/%llums hostgaps=%u arrint=%llu/%llums arrgaps=%u",
              w.decodeBlock.count * 1000.0 / elapsed,
              w.bytes * 8.0 / 1000.0 / elapsed,
              w.idrFrames,
@@ -143,7 +170,9 @@ bool MaybeFormatReport(char* buf, size_t len) {
              w.paint.count, w.picturesDropped,
              w.inputDelay.count,
              (unsigned long long)w.inputDelay.Avg(), (unsigned long long)w.inputDelay.max,
-             rtt, rttVar);
+             rtt, rttVar,
+             (unsigned long long)w.hostInterval.Avg(), (unsigned long long)w.hostInterval.max, w.hostGaps,
+             (unsigned long long)w.arrivalInterval.Avg(), (unsigned long long)w.arrivalInterval.max, w.arrivalGaps);
     return true;
 }
 

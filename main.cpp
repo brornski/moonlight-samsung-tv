@@ -227,6 +227,10 @@ void MoonlightInstance::HandleMessage(const pp::Var& var_message) {
         HandlePair(callbackId, params);
     } else if (strcmp(method.c_str(), "STUN") == 0) {
         HandleSTUN(callbackId, params);
+    } else if (strcmp(method.c_str(), "setPacingBuffer") == 0) {
+        extern volatile unsigned int s_PacingBufferMs;
+        s_PacingBufferMs = (unsigned int)atoi(params.Get(0).AsString().c_str());
+        ClLogMessage("Frame pacing buffer: %u ms\n", s_PacingBufferMs);
     } else if (strcmp(method.c_str(), "setLegacyRenderer") == 0) {
         s_ForceLegacyRenderer = params.Get(0).AsString() == "1";
         ClLogMessage("Legacy renderer forced: %d (applies to the next stream)\n", s_ForceLegacyRenderer);

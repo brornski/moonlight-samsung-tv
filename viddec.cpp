@@ -39,6 +39,14 @@ static unsigned int s_LastPresentationTimeMs;
 static NaClPlayer::TimeTicks s_LastPacketPts;
 static uint64_t s_NextAppendErrorLogMs;
 static uint64_t s_PlayStartMs;
+
+// Frame pacing buffer for the low-latency player (0 = display on arrival)
+volatile unsigned int s_PacingBufferMs = 0;
+static bool s_PaceAnchored;
+static double s_PaceAnchorPts;
+static uint32_t s_PaceAnchorHostMs;
+#define PACING_MAX_EXTRA_SEC 0.050
+
 #ifdef MOONLIGHT_DIAG
 static uint64_t s_NextClockLogMs;
 static uint32_t s_DiagFrames, s_DiagNonRefFrames, s_DiagMaxBytes;
@@ -124,6 +132,7 @@ static int SetupNaClPlayer(int width, int height, int frameRate) {
         return -1;
     }
     s_PlayStartMs = LiGetMillis();
+    s_PaceAnchored = false;
 #ifdef MOONLIGHT_DIAG
     s_NextClockLogMs = 0;
 #endif
@@ -482,6 +491,11 @@ int MoonlightInstance::VidDecSubmitDecodeUnit(PDECODE_UNIT decodeUnit) {
     unsigned int offset;
     unsigned int totalLength;
 
+#ifdef MOONLIGHT_DIAG
+    diag::OnFrameTiming(decodeUnit->presentationTimeMs,
+                        decodeUnit->enqueueTimeMs != 0 ? decodeUnit->enqueueTimeMs : LiGetMillis());
+#endif
+
     totalLength = decodeUnit->fullLength;
     if (decodeUnit->frameType == FRAME_TYPE_IDR) {
         // Add some extra space for the SPS fixup
@@ -517,11 +531,31 @@ int MoonlightInstance::VidDecSubmitDecodeUnit(PDECODE_UNIT decodeUnit) {
 
         NaClPlayer::ESPacket packet;
         packet.duration = 1.0 / s_PlayerFrameRate;
-        // Stamp each frame with the player's own running time (time since Play()).
-        // Host-relative timestamps start at 0 while the player clock has already
-        // been running since setup, so every frame would arrive "late" and be dropped.
+        // Timestamps live in the player's running time (time since Play()). Host-relative
+        // timestamps start at 0 while the player clock has already been running since
+        // setup, so raw host times would make every frame "late" and be dropped.
         uint64_t nowMs = LiGetMillis();
-        packet.pts = (nowMs - s_PlayStartMs) / 1000.0;
+        double nowSec = (nowMs - s_PlayStartMs) / 1000.0;
+        unsigned int bufferMs = s_PacingBufferMs;
+        if (bufferMs == 0 || decodeUnit->presentationTimeMs == 0) {
+            // Lowest latency: show each frame as soon as it arrives
+            packet.pts = nowSec;
+            s_PaceAnchored = false;
+        }
+        else {
+            // Smoothing: schedule frames on the host's capture cadence, delayed by
+            // bufferMs, so arrival jitter up to that much is invisible. Re-anchor when
+            // a frame would already be late, or when we have drifted well ahead.
+            double buffer = bufferMs / 1000.0;
+            double pts = s_PaceAnchorPts + ((int32_t)(decodeUnit->presentationTimeMs - s_PaceAnchorHostMs)) / 1000.0;
+            if (!s_PaceAnchored || pts < nowSec || pts > nowSec + buffer + PACING_MAX_EXTRA_SEC) {
+                s_PaceAnchorPts = nowSec + buffer;
+                s_PaceAnchorHostMs = decodeUnit->presentationTimeMs;
+                s_PaceAnchored = true;
+                pts = s_PaceAnchorPts;
+            }
+            packet.pts = pts;
+        }
         if (packet.pts <= s_LastPacketPts) {
             packet.pts = s_LastPacketPts + 0.001;
         }

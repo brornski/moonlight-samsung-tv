@@ -16,6 +16,8 @@ void Reset();
 uint32_t BeginSubmit(uint64_t nowMs);
 void EndSubmit(uint32_t bytes, bool idr, uint64_t receiveMs, uint64_t enqueueMs,
                uint16_t hostLatencyTenthsMs, uint64_t submitStartMs, uint64_t submitEndMs);
+// Frame pacing: host capture timestamps vs local arrival times (decoder thread).
+void OnFrameTiming(uint32_t presentationTimeMs, uint64_t arrivalMs);
 
 // Main thread
 void OnPictureReady(uint32_t decodeId, bool droppedUnpainted);
@@ -31,6 +33,7 @@ bool MaybeFormatReport(char* buf, size_t len);
 inline void Reset() {}
 inline uint32_t BeginSubmit(uint64_t) { return 0; }
 inline void EndSubmit(uint32_t, bool, uint64_t, uint64_t, uint16_t, uint64_t, uint64_t) {}
+inline void OnFrameTiming(uint32_t, uint64_t) {}
 inline void OnPictureReady(uint32_t, bool) {}
 inline void OnPaintStart() {}
 inline void OnPaintFinished() {}
